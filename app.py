@@ -26,13 +26,13 @@ API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 client = OpenAI(api_key=API_KEY, base_url="https://api.deepseek.com")
 
 # Localizar habilidades en la estructura del fork
-# La carpeta original suele ser 'skills'
 base_path = "skills"
 if not os.path.exists(base_path):
-    base_path = "habilidades" # Por si se renombró al importar
+    base_path = "habilidades" 
 
 if os.path.exists(base_path):
-    habilidades = [d for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))]
+    # CORRECCIÓN: Buscamos archivos .md directamente
+    habilidades = [f.replace('.md', '') for f in os.listdir(base_path) if f.endswith('.md')]
     habilidades.sort()
 else:
     habilidades = []
@@ -41,14 +41,14 @@ else:
 # Interfaz de Usuario
 seleccion = st.selectbox("Elegir Especialista:", habilidades)
 contexto = st.text_area("Detalles de la campaña o producto:", height=150, 
-                        placeholder="Ej: Llantas Maxell para camiones, enfoque en durabilidad y carga pesada...")
+                        placeholder="Ej: Llantas Maxell para camiones...")
 
 if st.button("GENERAR ESTRATEGIA"):
     if not API_KEY:
         st.error("Falta la API Key de DeepSeek en la configuración.")
     elif contexto and seleccion:
-        # Ruta al archivo SKILL.md dentro de la carpeta de la habilidad
-        path_prompt = os.path.join(base_path, seleccion, "SKILL.md")
+        # CORRECCIÓN: Ruta directa al archivo .md
+        path_prompt = os.path.join(base_path, f"{seleccion}.md")
         
         try:
             with open(path_prompt, "r", encoding="utf-8") as f:
@@ -69,7 +69,6 @@ if st.button("GENERAR ESTRATEGIA"):
                 st.markdown(chat_completion.choices[0].message.content)
                 
         except FileNotFoundError:
-            st.error(f"No se encontró el archivo SKILL.md en {seleccion}")
+            st.error(f"No se encontró el archivo {seleccion}.md")
     else:
         st.warning("Completa los campos antes de continuar.")
-      
