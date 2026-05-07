@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from openai import OpenAI
+import google.generativeai as genai
 
 # Configuración Visual
 st.set_page_config(page_title="Central de Agentes", layout="centered")
@@ -21,33 +21,33 @@ st.markdown("""
 
 st.title("⚙️ AGENTES ESTRATÉGICOS")
 
-# Conexión a DeepSeek
-API_KEY = os.environ.get("DEEPSEEK_API_KEY")
-client = OpenAI(api_key=API_KEY, base_url="https://api.deepseek.com")
+# Conexión a Gemini
+API_KEY = os.environ.get("GEMINI_API_KEY")
+if API_KEY:
+    genai.configure(api_key=API_KEY)
 
-# --- NUEVO RADAR INTELIGENTE DE HABILIDADES ---
+# --- RADAR INTELIGENTE DE HABILIDADES ---
 habilidades_dict = {}
-carpetas_a_revisar = ["skills", "habilidades", "."] # Revisa la carpeta skills y también la raíz del proyecto
+carpetas_a_revisar = ["skills", "habilidades", "."] 
 
 for carpeta in carpetas_a_revisar:
     if os.path.exists(carpeta) and os.path.isdir(carpeta):
         for elemento in os.listdir(carpeta):
             ruta_completa = os.path.join(carpeta, elemento)
             
-            # 1. Atrapa los archivos sueltos que creamos nosotros (.md)
+            # Archivos sueltos .md
             if os.path.isfile(ruta_completa) and elemento.endswith('.md') and elemento.lower() not in ['readme.md', 'requirements.txt', 'app.py']:
                 nombre = elemento.replace('.md', '')
                 if nombre not in habilidades_dict:
                     habilidades_dict[nombre] = ruta_completa
                     
-            # 2. Atrapa las carpetas originales del Fork (las que tienen SKILL.md adentro)
+            # Carpetas del Fork con SKILL.md
             elif os.path.isdir(ruta_completa):
                 ruta_skill = os.path.join(ruta_completa, "SKILL.md")
                 if os.path.exists(ruta_skill):
                     if elemento not in habilidades_dict:
                         habilidades_dict[elemento] = ruta_skill
 
-# Ordenar la lista alfabéticamente para el menú
 nombres_habilidades = list(habilidades_dict.keys())
 nombres_habilidades.sort()
 
@@ -61,29 +61,31 @@ else:
 
     if st.button("GENERAR ESTRATEGIA"):
         if not API_KEY:
-            st.error("Falta la API Key de DeepSeek en Render.")
+            st.error("Falta la API Key de Gemini en Render (GEMINI_API_KEY).")
         elif contexto and seleccion:
-            path_prompt = habilidades_dict[seleccion] # Busca la ruta exacta que encontró el radar
+            path_prompt = habilidades_dict[seleccion] 
             
             try:
                 with open(path_prompt, "r", encoding="utf-8") as f:
                     system_prompt = f.read()
 
-                with st.spinner(f"DeepSeek procesando con {seleccion}..."):
-                    chat_completion = client.chat.completions.create(
-                        model="deepseek-chat",
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": contexto}
-                        ],
-                        temperature=0.7,
-                        stream=False
+                with st.spinner(f"Gemini procesando con {seleccion}..."):
+                    # Inicializar modelo de Gemini con las instrucciones del agente
+                    model = genai.GenerativeModel(
+                        model_name="gemini-2.5-flash",
+                        system_instruction=system_prompt
+                    )
+                    
+                    # Generar respuesta
+                    response = model.generate_content(
+                        contexto,
+                        generation_config=genai.types.GenerationConfig(temperature=0.7)
                     )
                     
                     st.markdown("---")
-                    st.markdown(chat_completion.choices[0].message.content)
+                    st.markdown(response.text)
                     
             except Exception as e:
-                st.error(f"Error al leer el archivo: {e}")
+                st.error(f"Error en la generación: {e}")
         else:
             st.warning("Completa los campos antes de continuar.")
