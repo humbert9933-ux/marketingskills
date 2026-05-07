@@ -2,8 +2,8 @@ import streamlit as st
 import os
 from openai import OpenAI
 
-# Configuración Visual (Estética Premium e Industrial)
-st.set_page_config(page_title="Marketing Agents Central", layout="centered")
+# Configuración Visual
+st.set_page_config(page_title="Central de Agentes", layout="centered")
 
 st.markdown("""
     <style>
@@ -25,50 +25,65 @@ st.title("⚙️ AGENTES ESTRATÉGICOS")
 API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 client = OpenAI(api_key=API_KEY, base_url="https://api.deepseek.com")
 
-# Localizar habilidades en la estructura del fork
-base_path = "skills"
-if not os.path.exists(base_path):
-    base_path = "habilidades" 
+# --- NUEVO RADAR INTELIGENTE DE HABILIDADES ---
+habilidades_dict = {}
+carpetas_a_revisar = ["skills", "habilidades", "."] # Revisa la carpeta skills y también la raíz del proyecto
 
-if os.path.exists(base_path):
-    # CORRECCIÓN: Buscamos archivos .md directamente
-    habilidades = [f.replace('.md', '') for f in os.listdir(base_path) if f.endswith('.md')]
-    habilidades.sort()
-else:
-    habilidades = []
-    st.error("No se encontró la carpeta de habilidades.")
+for carpeta in carpetas_a_revisar:
+    if os.path.exists(carpeta) and os.path.isdir(carpeta):
+        for elemento in os.listdir(carpeta):
+            ruta_completa = os.path.join(carpeta, elemento)
+            
+            # 1. Atrapa los archivos sueltos que creamos nosotros (.md)
+            if os.path.isfile(ruta_completa) and elemento.endswith('.md') and elemento.lower() not in ['readme.md', 'requirements.txt', 'app.py']:
+                nombre = elemento.replace('.md', '')
+                if nombre not in habilidades_dict:
+                    habilidades_dict[nombre] = ruta_completa
+                    
+            # 2. Atrapa las carpetas originales del Fork (las que tienen SKILL.md adentro)
+            elif os.path.isdir(ruta_completa):
+                ruta_skill = os.path.join(ruta_completa, "SKILL.md")
+                if os.path.exists(ruta_skill):
+                    if elemento not in habilidades_dict:
+                        habilidades_dict[elemento] = ruta_skill
+
+# Ordenar la lista alfabéticamente para el menú
+nombres_habilidades = list(habilidades_dict.keys())
+nombres_habilidades.sort()
 
 # Interfaz de Usuario
-seleccion = st.selectbox("Elegir Especialista:", habilidades)
-contexto = st.text_area("Detalles de la campaña o producto:", height=150, 
-                        placeholder="Ej: Llantas Maxell para camiones...")
+if not nombres_habilidades:
+    st.error("Buscando agentes... Asegúrate de tener archivos .md en tu repositorio.")
+else:
+    seleccion = st.selectbox("Elegir Especialista:", nombres_habilidades)
+    contexto = st.text_area("Detalles de la campaña o producto:", height=150, 
+                            placeholder="Ej: Llantas Maxell para camiones...")
 
-if st.button("GENERAR ESTRATEGIA"):
-    if not API_KEY:
-        st.error("Falta la API Key de DeepSeek en la configuración.")
-    elif contexto and seleccion:
-        # CORRECCIÓN: Ruta directa al archivo .md
-        path_prompt = os.path.join(base_path, f"{seleccion}.md")
-        
-        try:
-            with open(path_prompt, "r", encoding="utf-8") as f:
-                system_prompt = f.read()
+    if st.button("GENERAR ESTRATEGIA"):
+        if not API_KEY:
+            st.error("Falta la API Key de DeepSeek en Render.")
+        elif contexto and seleccion:
+            path_prompt = habilidades_dict[seleccion] # Busca la ruta exacta que encontró el radar
+            
+            try:
+                with open(path_prompt, "r", encoding="utf-8") as f:
+                    system_prompt = f.read()
 
-            with st.spinner("DeepSeek procesando..."):
-                chat_completion = client.chat.completions.create(
-                    model="deepseek-chat",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": contexto}
-                    ],
-                    temperature=0.7,
-                    stream=False
-                )
-                
-                st.markdown("---")
-                st.markdown(chat_completion.choices[0].message.content)
-                
-        except FileNotFoundError:
-            st.error(f"No se encontró el archivo {seleccion}.md")
-    else:
-        st.warning("Completa los campos antes de continuar.")
+                with st.spinner(f"DeepSeek procesando con {seleccion}..."):
+                    chat_completion = client.chat.completions.create(
+                        model="deepseek-chat",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": contexto}
+                        ],
+                        temperature=0.7,
+                        stream=False
+                    )
+                    
+                    st.markdown("---")
+                    st.markdown(chat_completion.choices[0].message.content)
+                    
+            except Exception as e:
+                st.error(f"Error al leer el archivo: {e}")
+        else:
+            st.warning("Completa los campos antes de continuar.")
