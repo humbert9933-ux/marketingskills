@@ -1,9 +1,10 @@
 import streamlit as st
 import os
 import google.generativeai as genai
+import urllib.parse # Para procesar la URL de la imagen
 
 # Configuración Visual
-st.set_page_config(page_title="Central de Agentes", layout="centered")
+st.set_page_config(page_title="Central Multimedia IA", layout="centered")
 
 st.markdown("""
     <style>
@@ -16,76 +17,79 @@ st.markdown("""
     }
     .stButton>button:hover { border-color: #BB86FC; color: #BB86FC; }
     h1 { font-family: 'Helvetica Neue', sans-serif; font-weight: 700; color: #FFFFFF; }
+    .img-container { border: 1px solid #333; border-radius: 10px; padding: 10px; background: #1E1E1E; }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("⚙️ AGENTES ESTRATÉGICOS")
+st.title("⚙️ CENTRAL MULTIMEDIA")
 
 # Conexión a Gemini
 API_KEY = os.environ.get("GEMINI_API_KEY")
 if API_KEY:
     genai.configure(api_key=API_KEY)
 
-# --- RADAR INTELIGENTE DE HABILIDADES ---
+# --- RADAR DE HABILIDADES ---
 habilidades_dict = {}
-carpetas_a_revisar = ["skills", "habilidades", "."] 
+carpetas = ["skills", "habilidades", "."] 
+for c in carpetas:
+    if os.path.exists(c) and os.path.isdir(c):
+        for e in os.listdir(c):
+            ruta = os.path.join(c, e)
+            if os.path.isfile(ruta) and e.endswith('.md') and e.lower() not in ['readme.md', 'requirements.txt', 'app.py']:
+                habilidades_dict[e.replace('.md', '')] = ruta
+            elif os.path.isdir(ruta):
+                sk = os.path.join(ruta, "SKILL.md")
+                if os.path.exists(sk): habilidades_dict[e] = sk
 
-for carpeta in carpetas_a_revisar:
-    if os.path.exists(carpeta) and os.path.isdir(carpeta):
-        for elemento in os.listdir(carpeta):
-            ruta_completa = os.path.join(carpeta, elemento)
-            
-            # Archivos sueltos .md
-            if os.path.isfile(ruta_completa) and elemento.endswith('.md') and elemento.lower() not in ['readme.md', 'requirements.txt', 'app.py']:
-                nombre = elemento.replace('.md', '')
-                if nombre not in habilidades_dict:
-                    habilidades_dict[nombre] = ruta_completa
-                    
-            # Carpetas del Fork con SKILL.md
-            elif os.path.isdir(ruta_completa):
-                ruta_skill = os.path.join(ruta_completa, "SKILL.md")
-                if os.path.exists(ruta_skill):
-                    if elemento not in habilidades_dict:
-                        habilidades_dict[elemento] = ruta_skill
+nombres = sorted(list(habilidades_dict.keys()))
 
-nombres_habilidades = list(habilidades_dict.keys())
-nombres_habilidades.sort()
+if nombres:
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        seleccion = st.selectbox("Elegir Especialista:", nombres)
+    with col2:
+        generar_img = st.checkbox("¿Imagen?", value=True)
 
-# Interfaz de Usuario
-if not nombres_habilidades:
-    st.error("Buscando agentes... Asegúrate de tener archivos .md en tu repositorio.")
-else:
-    seleccion = st.selectbox("Elegir Especialista:", nombres_habilidades)
-    contexto = st.text_area("Detalles de la campaña o producto:", height=150, 
-                            placeholder="Ej: Llantas Maxell para camiones...")
+    contexto = st.text_area("Detalles de la campaña:", height=150, placeholder="Ej: Llantas Maxell para camiones...")
 
-    if st.button("GENERAR ESTRATEGIA"):
+    if st.button("GENERAR CONTENIDO COMPLETO"):
         if not API_KEY:
-            st.error("Falta la API Key de Gemini en Render (GEMINI_API_KEY).")
+            st.error("Configura GEMINI_API_KEY en Render.")
         elif contexto and seleccion:
-            path_prompt = habilidades_dict[seleccion] 
-            
             try:
-                with open(path_prompt, "r", encoding="utf-8") as f:
+                with open(habilidades_dict[seleccion], "r", encoding="utf-8") as f:
                     system_prompt = f.read()
 
-                with st.spinner(f"Gemini procesando con {seleccion}..."):
-                    # Inicializar modelo de Gemini con las instrucciones del agente
-                    model = genai.GenerativeModel(
-                        model_name="gemini-2.5-flash",
-                        system_instruction=system_prompt
-                    )
-                    
-                    # Generar respuesta
-                    response = model.generate_content(
-                        contexto,
-                        generation_config=genai.types.GenerationConfig(temperature=0.7)
-                    )
+                # Si el usuario quiere imagen, le pedimos a Gemini un prompt extra
+                if generar_img:
+                    system_prompt += "\n\nIMPORTANTE: Al final de tu respuesta, añade una sección llamada 'PROMPT_IMAGEN:' seguida de una descripción detallada en INGLÉS para generar una imagen publicitaria de este producto. La descripción debe ser cinematográfica, estilo profesional y sin texto."
+
+                model = genai.GenerativeModel(model_name="gemini-2.0-flash", system_instruction=system_prompt)
+                
+                with st.spinner("Procesando texto e idea visual..."):
+                    response = model.generate_content(contexto)
+                    texto_final = response.text
+
+                # Separar el texto del prompt de imagen si existe
+                if "PROMPT_IMAGEN:" in texto_final:
+                    partes = texto_final.split("PROMPT_IMAGEN:")
+                    resultado_texto = partes[0]
+                    imagen_prompt = partes[1].strip()
                     
                     st.markdown("---")
-                    st.markdown(response.text)
+                    st.markdown(resultado_texto)
+                    
+                    # Generar y mostrar imagen usando Pollinations (Gratis y rápido)
+                    prompt_encoded = urllib.parse.quote(imagen_prompt)
+                    # Usamos un modelo estilo "Flux" o cinematográfico
+                    url_imagen = f"https://pollinations.ai/p/{prompt_encoded}?width=1024&height=1024&model=flux&seed=42"
+                    
+                    st.subheader("🖼️ Sugerencia Visual para la Campaña:")
+                    st.image(url_imagen, caption="Imagen generada por IA para tu anuncio", use_container_width=True)
+                    st.info(f"**Prompt usado:** {imagen_prompt}")
+                else:
+                    st.markdown("---")
+                    st.markdown(texto_final)
                     
             except Exception as e:
-                st.error(f"Error en la generación: {e}")
-        else:
-            st.warning("Completa los campos antes de continuar.")
+                st.error(f"Error: {e}")
