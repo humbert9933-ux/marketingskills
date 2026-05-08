@@ -64,7 +64,7 @@ if nombres:
                 if generar_img:
                     system_prompt += "\n\nIMPORTANTE: Al final de tu respuesta, añade una sección llamada 'PROMPT_IMAGEN:' seguida de una descripción detallada en INGLÉS para generar una imagen publicitaria de este producto. La descripción debe ser cinematográfica, estilo profesional y sin texto."
 
-                model = genai.GenerativeModel(model_name="gemini-2.0-flash", system_instruction=system_prompt)
+                model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction=system_prompt)
                 
                 with st.spinner("Procesando texto e idea visual..."):
                     response = model.generate_content(contexto)
