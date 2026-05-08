@@ -21,7 +21,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🚀 CENTRAL MULTIMEDIA (NANO-OPTIMIZED)")
+st.title("🚀 CENTRAL MULTIMEDIA (ULTRA-STABLE)")
 
 # --- CONEXIÓN A GROQ ---
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
@@ -37,8 +37,8 @@ for carpeta in carpetas:
             if os.path.isfile(ruta_completa) and elemento.endswith('.md') and elemento.lower() not in ['readme.md', 'requirements.txt', 'app.py']:
                 habilidades_dict[elemento.replace('.md', '')] = ruta_completa
             elif os.path.isdir(ruta_completa):
-                ruta_skill = os.path.join(ruta_completa, "SKILL.md")
-                if os.path.exists(ruta_skill): habilidades_dict[elemento] = ruta_skill
+                sk = os.path.join(ruta_completa, "SKILL.md")
+                if os.path.exists(sk): habilidades_dict[elemento] = sk
 
 nombres_habilidades = sorted(list(habilidades_dict.keys()))
 
@@ -52,40 +52,52 @@ else:
     with col2:
         generar_img = st.checkbox("¿Imagen?", value=True)
 
-    contexto = st.text_area("Detalles de la campaña:", height=150)
+    contexto = st.text_area("Detalles de la campaña:", height=150, placeholder="Ej: Llantas Atlander 4x4...")
 
-    if st.button("GENERAR CONTENIDO"):
-        if contexto and seleccion:
+    if st.button("GENERAR CONTENIDO COMPLETO"):
+        if not GROQ_API_KEY:
+            st.error("❌ Falta GROQ_API_KEY en Render.")
+        elif contexto and seleccion:
             try:
                 with open(habilidades_dict[seleccion], "r", encoding="utf-8") as f:
                     agent_instructions = f.read()
 
-                # Aquí es donde Gemini actúa como Director de Arte
-                if generar_img:
-                    agent_instructions += """
-                    \n\nAL FINAL, genera un IMAGE_PROMPT_START: seguido de una descripción cinematográfica en inglés. 
-                    Usa este estilo: 'High-end commercial photography, studio lighting, 8k, hyper-realistic, photorealistic'.
-                    """
+                # Instrucción inyectada con separador único
+                system_instruction = agent_instructions + "\n\nIMPORTANTE: Al final de tu respuesta escribe exactamente '---SEP---' y luego un prompt descriptivo en inglés para la imagen."
 
-                completion = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[{"role": "system", "content": agent_instructions}, {"role": "user", "content": contexto}]
-                )
-                
-                full_text = completion.choices[0].message.content
-                
-                if "IMAGE_PROMPT_START:" in full_text:
-                    partes = full_text.split("IMAGE_PROMPT_START:")
-                    st.markdown("---")
-                    st.markdown(partes[0])
+                with st.spinner("Procesando multimedia..."):
+                    completion = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[{"role": "system", "content": system_instruction}, {"role": "user", "content": contexto}]
+                    )
+                    full_text = completion.choices[0].message.content
+
+                # --- LÓGICA DE DETECCIÓN MEJORADA ---
+                if "---SEP---" in full_text:
+                    partes = full_text.split("---SEP---")
+                    copy_texto = partes[0]
+                    prompt_final = partes[1].strip()
+                else:
+                    copy_texto = full_text
+                    # Plan B: Si la IA olvida el separador, inventamos el prompt basándonos en el contexto
+                    prompt_final = f"Professional advertising photography of {contexto}, studio lighting, high resolution, 8k, cinematic."
+
+                st.markdown("---")
+                st.markdown(copy_texto)
+
+                if generar_img:
+                    # Limpiamos el prompt de caracteres que rompen URLs
+                    prompt_clean = re.sub(r'[^a-zA-Z0-9\s,]', '', prompt_final)
+                    prompt_encoded = urllib.parse.quote(prompt_clean)
                     
-                    # Usamos Pollinations con el modelo FLUX (que es el más parecido al mío)
-                    prompt_encoded = urllib.parse.quote(partes[1].strip())
+                    # Usamos Pollinations con FLUX (es el que mejor funciona ahora)
                     url_img = f"https://pollinations.ai/p/{prompt_encoded}?width=1024&height=1024&model=flux&nologo=true"
                     
-                    st.image(url_img, caption="Propuesta Visual Generada", use_container_width=True)
-                else:
-                    st.markdown(full_text)
-                    
+                    st.subheader("🖼️ Propuesta Visual:")
+                    # Forzamos la carga de la imagen con una estructura HTML robusta
+                    st.markdown(f'<img src="{url_img}" style="width:100%; border-radius:10px; border: 1px solid #333;">', unsafe_allow_html=True)
+                    st.info(f"**Prompt generado:** {prompt_final[:100]}...")
+
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Error técnico: {e}")
+
