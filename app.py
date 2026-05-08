@@ -3,7 +3,7 @@ import os
 from groq import Groq
 import urllib.parse
 
-# --- CONFIGURACIÓN VISUAL ---
+# --- CONFIGURACIÓN VISUAL (Estética Premium e Industrial) ---
 st.set_page_config(page_title="Central Multimedia IA", layout="centered")
 
 st.markdown("""
@@ -21,13 +21,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🚀 CENTRAL MULTIMEDIA (GROQ SPEED)")
+st.title("🚀 CENTRAL MULTIMEDIA (GROQ V3.3)")
 
 # --- CONEXIÓN A GROQ ---
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-# --- RADAR DE AGENTES ---
+# --- RADAR DE AGENTES ESTRATÉGICOS ---
 habilidades_dict = {}
 carpetas = ["skills", "habilidades", "."] 
 for carpeta in carpetas:
@@ -42,9 +42,9 @@ for carpeta in carpetas:
 
 nombres_habilidades = sorted(list(habilidades_dict.keys()))
 
-# --- INTERFAZ ---
+# --- INTERFAZ DE USUARIO ---
 if not nombres_habilidades:
-    st.error("⚠️ No se encontraron agentes.")
+    st.error("⚠️ No se encontraron agentes (.md) en el repositorio.")
 else:
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -52,22 +52,26 @@ else:
     with col2:
         generar_img = st.checkbox("¿Imagen?", value=True)
 
-    contexto = st.text_area("Detalles de la campaña:", height=150)
+    contexto = st.text_area("Detalles de la campaña o producto:", height=150, 
+                            placeholder="Ej: Llantas Atlander para 4x4, enfoque en aventura...")
 
-    if st.button("GENERAR CONTENIDO ULTRA-RÁPIDO"):
+    if st.button("GENERAR CONTENIDO AHORA"):
         if not GROQ_API_KEY:
-            st.error("❌ Configura GROQ_API_KEY en Render.")
+            st.error("❌ Falta la variable GROQ_API_KEY en Render.")
         elif contexto and seleccion:
             try:
+                # Leer instrucciones del agente seleccionado
                 with open(habilidades_dict[seleccion], "r", encoding="utf-8") as f:
                     system_prompt = f.read()
 
+                # Inyectar regla de imagen si está activo
                 if generar_img:
-                    system_prompt += "\n\nAl final añade 'PROMPT_IMAGEN:' y un prompt descriptivo en INGLÉS para una imagen publicitaria 4k."
+                    system_prompt += "\n\nIMPORTANTE: Al final de tu respuesta añade 'PROMPT_IMAGEN:' seguido de una descripción detallada en INGLÉS para una imagen publicitaria profesional, cinematográfica y sin texto."
 
-                with st.spinner("Groq procesando a velocidad luz..."):
+                with st.spinner(f"Groq procesando con {seleccion}..."):
+                    # LLAMADA AL NUEVO MODELO LLAMA 3.3 70B
                     completion = client.chat.completions.create(
-                        model="llama3-70b-8192", # El modelo más potente de Groq
+                        model="llama-3.3-70b-versatile",
                         messages=[
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": contexto}
@@ -76,19 +80,23 @@ else:
                     )
                     full_text = completion.choices[0].message.content
 
+                # Separación de Texto y Generación de Imagen
                 if "PROMPT_IMAGEN:" in full_text:
                     partes = full_text.split("PROMPT_IMAGEN:")
                     st.markdown("---")
                     st.markdown(partes[0])
                     
+                    # Generación visual (Modelo Flux vía Pollinations)
                     prompt_encoded = urllib.parse.quote(partes[1].strip())
-                    url_final = f"https://pollinations.ai/p/{prompt_encoded}?width=1024&height=1024&model=flux"
+                    url_imagen = f"https://pollinations.ai/p/{prompt_encoded}?width=1024&height=1024&model=flux&seed=42"
                     
                     st.subheader("🖼️ Propuesta Visual:")
-                    st.image(url_final, use_container_width=True)
+                    st.image(url_imagen, caption="Imagen generada para tu campaña", use_container_width=True)
                 else:
                     st.markdown("---")
                     st.markdown(full_text)
                     
             except Exception as e:
-                st.error(f"Error con Groq: {e}")
+                st.error(f"Hubo un problema con la API: {e}")
+        else:
+            st.warning("Completa los detalles antes de generar.")
