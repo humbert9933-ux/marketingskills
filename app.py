@@ -37,8 +37,8 @@ for carpeta in carpetas:
             if os.path.isfile(ruta_completa) and elemento.endswith('.md') and elemento.lower() not in ['readme.md', 'requirements.txt', 'app.py']:
                 habilidades_dict[elemento.replace('.md', '')] = ruta_completa
             elif os.path.isdir(ruta_completa):
-                sk = os.path.join(ruta_completa, "SKILL.md")
-                if os.path.exists(sk): habilidades_dict[elemento] = sk
+                ruta_skill = os.path.join(ruta_completa, "SKILL.md")
+                if os.path.exists(ruta_skill): habilidades_dict[elemento] = ruta_skill
 
 nombres_habilidades = sorted(list(habilidades_dict.keys()))
 
@@ -52,7 +52,7 @@ else:
     with col2:
         generar_img = st.checkbox("¿Imagen?", value=True)
 
-    contexto = st.text_area("Detalles de la campaña:", height=150, placeholder="Ej: Llantas Atlander 4x4...")
+    contexto = st.text_area("Detalles de la campaña:", height=150)
 
     if st.button("GENERAR CONTENIDO COMPLETO"):
         if not GROQ_API_KEY:
@@ -62,8 +62,8 @@ else:
                 with open(habilidades_dict[seleccion], "r", encoding="utf-8") as f:
                     agent_instructions = f.read()
 
-                # Instrucción inyectada con separador único
-                system_instruction = agent_instructions + "\n\nIMPORTANTE: Al final de tu respuesta escribe exactamente '---SEP---' y luego un prompt descriptivo en inglés para la imagen."
+                # Instrucción inyectada con separador único y orden de IDIOMA
+                system_instruction = agent_instructions + "\n\nIMPORTANTE: Al final de tu respuesta escribe exactamente '---SEP---' y luego un prompt técnico, detallado y únicamente en INGLÉS para la imagen publicitaria."
 
                 with st.spinner("Procesando multimedia..."):
                     completion = client.chat.completions.create(
@@ -72,32 +72,29 @@ else:
                     )
                     full_text = completion.choices[0].message.content
 
-                # --- LÓGICA DE DETECCIÓN MEJORADA ---
+                # --- LÓGICA DE DETECCIÓN ---
                 if "---SEP---" in full_text:
                     partes = full_text.split("---SEP---")
                     copy_texto = partes[0]
-                    prompt_final = partes[1].strip()
+                    prompt_para_img = partes[1].strip()
                 else:
                     copy_texto = full_text
-                    # Plan B: Si la IA olvida el separador, inventamos el prompt basándonos en el contexto
-                    prompt_final = f"Professional advertising photography of {contexto}, studio lighting, high resolution, 8k, cinematic."
+                    prompt_para_img = f"Professional commercial photography of {contexto}, 8k, cinematic lighting"
 
                 st.markdown("---")
                 st.markdown(copy_texto)
 
                 if generar_img:
-                    # Limpiamos el prompt de caracteres que rompen URLs
-                    prompt_clean = re.sub(r'[^a-zA-Z0-9\s,]', '', prompt_final)
+                    # LIMPIEZA EXTREMA: Solo letras, números y espacios para la URL
+                    prompt_clean = re.sub(r'[^a-zA-Z0-9\s]', '', prompt_para_img)
                     prompt_encoded = urllib.parse.quote(prompt_clean)
                     
-                    # Usamos Pollinations con FLUX (es el que mejor funciona ahora)
-                    url_img = f"https://pollinations.ai/p/{prompt_encoded}?width=1024&height=1024&model=flux&nologo=true"
+                    # URL simplificada (esto evita el error de la imagen rota)
+                    url_img = f"https://pollinations.ai/p/{prompt_encoded}?width=1024&height=1024&model=flux&seed=42"
                     
                     st.subheader("🖼️ Propuesta Visual:")
-                    # Forzamos la carga de la imagen con una estructura HTML robusta
-                    st.markdown(f'<img src="{url_img}" style="width:100%; border-radius:10px; border: 1px solid #333;">', unsafe_allow_html=True)
-                    st.info(f"**Prompt generado:** {prompt_final[:100]}...")
-
+                    # Usamos el componente nativo de Streamlit que es más estable para URLs externas
+                    st.image(url_img, caption="Sugerencia visual para tu anuncio")
+                    
             except Exception as e:
                 st.error(f"Error técnico: {e}")
-
