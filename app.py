@@ -2,7 +2,7 @@ import streamlit as st
 import os
 from groq import Groq
 import urllib.parse
-import re # Librería para limpiar texto
+import re
 
 # --- CONFIGURACIÓN VISUAL ---
 st.set_page_config(page_title="Central Multimedia IA", layout="centered")
@@ -30,15 +30,22 @@ client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 # --- RADAR DE AGENTES ESTRATÉGICOS ---
 habilidades_dict = {}
 carpetas = ["skills", "habilidades", "."] 
+
 for carpeta in carpetas:
     if os.path.exists(carpeta) and os.path.isdir(carpeta):
         for elemento in os.listdir(carpeta):
             ruta_completa = os.path.join(carpeta, elemento)
+            # Detectar archivos .md sueltos
             if os.path.isfile(ruta_completa) and elemento.endswith('.md') and elemento.lower() not in ['readme.md', 'requirements.txt', 'app.py']:
-                habilidades_dict[elemento.replace('.md', '')] = ruta_completa
+                nombre = elemento.replace('.md', '')
+                if nombre not in habilidades_dict:
+                    habilidades_dict[nombre] = ruta_completa
+            # Detectar carpetas con SKILL.md
             elif os.path.isdir(ruta_completa):
-                sk = os.path.join(ruta_skill := os.path.join(ruta_completa, "SKILL.md")):
-                    if os.path.exists(ruta_skill): habilidades_dict[elemento] = ruta_skill
+                ruta_skill = os.path.join(ruta_completa, "SKILL.md")
+                if os.path.exists(ruta_skill):
+                    if elemento not in habilidades_dict:
+                        habilidades_dict[elemento] = ruta_skill
 
 nombres_habilidades = sorted(list(habilidades_dict.keys()))
 
@@ -60,17 +67,15 @@ else:
             st.error("❌ Falta la variable GROQ_API_KEY en Render.")
         elif contexto and seleccion:
             try:
-                # Leer instrucciones del agente seleccionado
                 with open(habilidades_dict[seleccion], "r", encoding="utf-8") as f:
                     system_prompt = f.read()
 
-                # Inyectar regla de imagen ULTRA-ESTRICTA si está activo
                 if generar_img:
-                    system_prompt += "\n\nCRITICAL INSTRUCTION: At the very end of your response, you MUST add exactly this label: 'IMAGE_PROMPT_START:' followed by a detailed, 4k, professional, cinematic advertising prompt IN ENGLISH for this product. Do not add any text after the prompt."
+                    system_prompt += "\n\nCRITICAL: At the very end, add exactly 'IMAGE_PROMPT_START:' followed by a detailed cinematic 4k advertising prompt in English for this product."
 
-                with st.spinner(f"Groq procesando con {seleccion}..."):
+                with st.spinner(f"Groq trabajando con {seleccion}..."):
                     completion = client.chat.completions.create(
-                        model="llama-3.3-70b-versatile", # Modelo Llama 3.3
+                        model="llama-3.3-70b-versatile",
                         messages=[
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": contexto}
@@ -79,34 +84,22 @@ else:
                     )
                     full_text = completion.choices[0].message.content
 
-                # NUEVO SISTEMA DE DETECCIÓN DE IMAGEN "FUERZA BRUTA"
-                etiqueta_imagen = "IMAGE_PROMPT_START:"
-                
-                if etiqueta_imagen in full_text:
-                    # Separar texto y prompt
-                    partes = full_text.split(etiqueta_imagen)
+                # Sistema de detección de imagen
+                etiqueta = "IMAGE_PROMPT_START:"
+                if etiqueta in full_text:
+                    partes = full_text.split(etiqueta)
                     st.markdown("---")
-                    st.markdown(partes[0]) # Mostrar el copy de marketing
+                    st.markdown(partes[0])
                     
-                    # Limpiar y procesar el prompt de imagen
-                    prompt_para_imagen = partes[1].strip()
-                    # Eliminar caracteres raros para la URL
-                    prompt_limpio = re.sub(r'[^\w\s\-\,]', '', prompt_para_imagen)
-                    
-                    # Generación visual (Modelo Flux vía Pollinations)
+                    prompt_limpio = re.sub(r'[^\w\s\-\,]', '', partes[1].strip())
                     prompt_encoded = urllib.parse.quote(prompt_limpio)
-                    url_imagen = f"https://pollinations.ai/p/{prompt_encoded}?width=1024&height=1024&model=flux&nologo=true"
+                    url_img = f"https://pollinations.ai/p/{prompt_encoded}?width=1024&height=1024&model=flux&nologo=true"
                     
-                    st.subheader("🖼️ Propuesta Visual para la Campaña:")
-                    st.image(url_imagen, use_container_width=True)
+                    st.subheader("🖼️ Propuesta Visual:")
+                    st.image(url_img, use_container_width=True)
                 else:
-                    # Si Groq ignoró la etiqueta, mostramos solo el texto
                     st.markdown("---")
                     st.markdown(full_text)
-                    if generar_img:
-                        st.warning("⚠️ El agente no generó el prompt de la imagen esta vez. Intenta ser más específico en los detalles.")
                     
             except Exception as e:
-                st.error(f"Hubo un problema con la API: {e}")
-        else:
-            st.warning("Completa los detalles antes de generar.")
+                st.error(f"Error: {e}")
