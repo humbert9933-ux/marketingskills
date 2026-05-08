@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-import google.generativeai as genai
+from groq import Groq
 import urllib.parse
 
 # --- CONFIGURACIÓN VISUAL ---
@@ -21,32 +21,24 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("⚙️ CENTRAL MULTIMEDIA")
+st.title("🚀 CENTRAL MULTIMEDIA (GROQ SPEED)")
 
-# --- CONEXIÓN A GEMINI (FORZANDO V1) ---
-API_KEY = os.environ.get("GEMINI_API_KEY")
-if API_KEY:
-    # Esta línea es el truco para eliminar el error 404
-    os.environ["GOOGLE_API_USE_MTLS_ENDPOINT"] = "never"
-    genai.configure(api_key=API_KEY)
+# --- CONEXIÓN A GROQ ---
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 # --- RADAR DE AGENTES ---
 habilidades_dict = {}
 carpetas = ["skills", "habilidades", "."] 
-
 for carpeta in carpetas:
     if os.path.exists(carpeta) and os.path.isdir(carpeta):
         for elemento in os.listdir(carpeta):
             ruta_completa = os.path.join(carpeta, elemento)
             if os.path.isfile(ruta_completa) and elemento.endswith('.md') and elemento.lower() not in ['readme.md', 'requirements.txt', 'app.py']:
-                nombre = elemento.replace('.md', '')
-                if nombre not in habilidades_dict:
-                    habilidades_dict[nombre] = ruta_completa
+                habilidades_dict[elemento.replace('.md', '')] = ruta_completa
             elif os.path.isdir(ruta_completa):
-                ruta_skill = os.path.join(ruta_completa, "SKILL.md")
-                if os.path.exists(ruta_skill):
-                    if elemento not in habilidades_dict:
-                        habilidades_dict[elemento] = ruta_skill
+                sk = os.path.join(ruta_completa, "SKILL.md")
+                if os.path.exists(sk): habilidades_dict[elemento] = sk
 
 nombres_habilidades = sorted(list(habilidades_dict.keys()))
 
@@ -62,26 +54,27 @@ else:
 
     contexto = st.text_area("Detalles de la campaña:", height=150)
 
-    if st.button("GENERAR CONTENIDO COMPLETO"):
-        if not API_KEY:
-            st.error("❌ Configura GEMINI_API_KEY en Render.")
+    if st.button("GENERAR CONTENIDO ULTRA-RÁPIDO"):
+        if not GROQ_API_KEY:
+            st.error("❌ Configura GROQ_API_KEY en Render.")
         elif contexto and seleccion:
             try:
                 with open(habilidades_dict[seleccion], "r", encoding="utf-8") as f:
                     system_prompt = f.read()
 
                 if generar_img:
-                    system_prompt += "\n\nIMPORTANTE: Al final añade 'PROMPT_IMAGEN:' y un prompt en inglés para una imagen publicitaria 4k."
+                    system_prompt += "\n\nAl final añade 'PROMPT_IMAGEN:' y un prompt descriptivo en INGLÉS para una imagen publicitaria 4k."
 
-                # Cambiamos a la versión de modelo que Render sí encuentra
-                model = genai.GenerativeModel(
-                    model_name="gemini-1.5-flash-latest", # Añadimos '-latest' para forzar búsqueda
-                    system_instruction=system_prompt
-                )
-                
-                with st.spinner("Generando contenido..."):
-                    response = model.generate_content(contexto)
-                    full_text = response.text
+                with st.spinner("Groq procesando a velocidad luz..."):
+                    completion = client.chat.completions.create(
+                        model="llama3-70b-8192", # El modelo más potente de Groq
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": contexto}
+                        ],
+                        temperature=0.7,
+                    )
+                    full_text = completion.choices[0].message.content
 
                 if "PROMPT_IMAGEN:" in full_text:
                     partes = full_text.split("PROMPT_IMAGEN:")
@@ -98,11 +91,4 @@ else:
                     st.markdown(full_text)
                     
             except Exception as e:
-                # Si el error persiste, probamos con el nombre alternativo del modelo
-                st.info("Reintentando conexión estable...")
-                try:
-                    model_alt = genai.GenerativeModel('gemini-1.5-flash')
-                    response = model_alt.generate_content(f"Instrucción: {system_prompt}\n\nTarea: {contexto}")
-                    st.markdown(response.text)
-                except:
-                    st.error(f"Error crítico: {e}")
+                st.error(f"Error con Groq: {e}")
