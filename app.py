@@ -21,7 +21,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🚀 CENTRAL MULTIMEDIA (ULTRA-STABLE)")
+st.title("🚀 CENTRAL MULTIMEDIA")
 
 # --- CONEXIÓN A GROQ ---
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
@@ -54,18 +54,16 @@ else:
 
     contexto = st.text_area("Detalles de la campaña:", height=150)
 
-    if st.button("GENERAR CONTENIDO COMPLETO"):
-        if not GROQ_API_KEY:
-            st.error("❌ Falta GROQ_API_KEY en Render.")
-        elif contexto and seleccion:
+    if st.button("GENERAR CONTENIDO"):
+        if contexto and seleccion:
             try:
                 with open(habilidades_dict[seleccion], "r", encoding="utf-8") as f:
                     agent_instructions = f.read()
 
-                # Instrucción inyectada con separador único y orden de IDIOMA
-                system_instruction = agent_instructions + "\n\nIMPORTANTE: Al final de tu respuesta escribe exactamente '---SEP---' y luego un prompt técnico, detallado y únicamente en INGLÉS para la imagen publicitaria."
+                # Instrucción para la IA: NO INCLUIR TELÉFONOS
+                system_instruction = agent_instructions + "\n\nIMPORTANTE: NO incluyas números de teléfono ni enlaces de contacto. Al final de tu respuesta escribe exactamente '---SEP---' y luego un prompt descriptivo en inglés para la imagen."
 
-                with st.spinner("Procesando multimedia..."):
+                with st.spinner("Procesando..."):
                     completion = client.chat.completions.create(
                         model="llama-3.3-70b-versatile",
                         messages=[{"role": "system", "content": system_instruction}, {"role": "user", "content": contexto}]
@@ -76,25 +74,21 @@ else:
                 if "---SEP---" in full_text:
                     partes = full_text.split("---SEP---")
                     copy_texto = partes[0]
-                    prompt_para_img = partes[1].strip()
+                    prompt_final = partes[1].strip()
                 else:
                     copy_texto = full_text
-                    prompt_para_img = f"Professional commercial photography of {contexto}, 8k, cinematic lighting"
+                    prompt_final = f"Professional advertising photography of {contexto}, studio lighting, 8k."
 
                 st.markdown("---")
                 st.markdown(copy_texto)
 
                 if generar_img:
-                    # LIMPIEZA EXTREMA: Solo letras, números y espacios para la URL
-                    prompt_clean = re.sub(r'[^a-zA-Z0-9\s]', '', prompt_para_img)
+                    prompt_clean = re.sub(r'[^a-zA-Z0-9\s,]', '', prompt_final)
                     prompt_encoded = urllib.parse.quote(prompt_clean)
-                    
-                    # URL simplificada (esto evita el error de la imagen rota)
-                    url_img = f"https://pollinations.ai/p/{prompt_encoded}?width=1024&height=1024&model=flux&seed=42"
+                    url_img = f"https://pollinations.ai/p/{prompt_encoded}?width=1024&height=1024&model=flux&nologo=true"
                     
                     st.subheader("🖼️ Propuesta Visual:")
-                    # Usamos el componente nativo de Streamlit que es más estable para URLs externas
-                    st.image(url_img, caption="Sugerencia visual para tu anuncio")
-                    
+                    st.image(url_img, use_container_width=True)
+
             except Exception as e:
-                st.error(f"Error técnico: {e}")
+                st.error(f"Error: {e}")
